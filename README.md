@@ -102,8 +102,9 @@ claude
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Haiku 계열 모델이 요청될 때 사용할 Codex 모델 |
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | Sonnet 계열 모델이 요청될 때 사용할 Codex 모델 |
 | `ANTHROPIC_DEFAULT_OPUS_MODEL` | Opus 계열 모델이 요청될 때 사용할 Codex 모델 |
+| `PASSTHROUGH_MODE` | `true/1/yes/on`이면 요청 모델명을 그대로 Codex에 전달 |
 
-**우선순위**: 환경변수 > 기본 매핑
+**우선순위**: `PASSTHROUGH_MODE=true`면 passthrough, 아니면 환경변수 > 기본 매핑
 
 예시:
 ```bash
@@ -330,6 +331,7 @@ chatgpt-codex-proxy/
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | - | Haiku → Codex 모델 매핑 |
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | - | Sonnet → Codex 모델 매핑 |
 | `ANTHROPIC_DEFAULT_OPUS_MODEL` | - | Opus → Codex 모델 매핑 |
+| `PASSTHROUGH_MODE` | `true` | 기본 passthrough, `false/0/no/off`면 매핑 모드 |
 
 ## 보안
 

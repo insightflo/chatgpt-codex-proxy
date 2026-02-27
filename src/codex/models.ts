@@ -17,6 +17,9 @@ const HARDCODED_MAPPING: Record<string, string> = {
   "claude-3-5-sonnet-20241022": "gpt-5.2-codex",
   "claude-3-haiku-20240307": "gpt-5.3-codex-spark",
   "claude-3-opus-20240229": "gpt-5.3-codex-xhigh",
+  "gpt-5.1": "gpt-5.1-codex",
+  "gpt-5.2": "gpt-5.2-codex",
+  "gpt-5.3": "gpt-5.3-codex",
 };
 
 const SUPPORTED_CODEX_MODELS = new Set<string>([
@@ -39,21 +42,42 @@ function getModelFamily(model: string): "haiku" | "sonnet" | "opus" | null {
   if (m.includes("haiku")) return "haiku";
   if (m.includes("opus")) return "opus";
   if (m.includes("sonnet")) return "sonnet";
+  if (m.startsWith("gpt-5.1") || m.startsWith("gpt-5.2") || m.startsWith("gpt-5.3")) return "sonnet";
   return null;
 }
 
 export const DEFAULT_CODEX_MODEL = "gpt-5.2-codex";
 
+function isPassthroughModeEnabled(): boolean {
+  const raw = process.env.PASSTHROUGH_MODE?.trim().toLowerCase();
+  if (!raw) return true;
+  if (raw === "0" || raw === "false" || raw === "no" || raw === "off") return false;
+  return true;
+}
+
 export function mapAnthropicModelToCodex(anthropicModel: string): string {
-  const family = getModelFamily(anthropicModel);
+  const normalizedModel = anthropicModel.trim();
+
+  if (isPassthroughModeEnabled()) {
+    const passthroughModel = normalizedModel || DEFAULT_CODEX_MODEL;
+    console.log(
+      `[chatgpt-codex-proxy] model_map anthropic=${normalizedModel || "-"} family=passthrough selected=- mapped=${passthroughModel} final=${passthroughModel}`,
+    );
+    return passthroughModel;
+  }
+
+  const isExplicitCodexModel = SUPPORTED_CODEX_MODELS.has(normalizedModel);
+  const family = isExplicitCodexModel ? null : getModelFamily(normalizedModel);
   const selectedModel = family ? getEnvModelForFamily(family) : undefined;
-  const mappedModel = HARDCODED_MAPPING[anthropicModel] ?? DEFAULT_CODEX_MODEL;
+  const mappedModel = isExplicitCodexModel
+    ? normalizedModel
+    : HARDCODED_MAPPING[normalizedModel] ?? DEFAULT_CODEX_MODEL;
   const finalModel = selectedModel ?? mappedModel;
   const validatedModel =
     selectedModel && !SUPPORTED_CODEX_MODELS.has(selectedModel) ? mappedModel : finalModel;
 
   console.log(
-    `[chatgpt-codex-proxy] model_map anthropic=${anthropicModel} family=${family ?? "unknown"} selected=${
+    `[chatgpt-codex-proxy] model_map anthropic=${normalizedModel} family=${family ?? "unknown"} selected=${
       selectedModel ?? "-"
     } mapped=${mappedModel} final=${validatedModel}`,
   );
