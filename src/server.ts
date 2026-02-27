@@ -4,9 +4,10 @@ import messagesRouter from "./routes/messages.js";
 import { errorHandler, notFoundHandler } from "./utils/errors.js";
 
 const app = express();
+const jsonBodyLimit = process.env.PROXY_JSON_LIMIT ?? "20mb";
 
 app.use(cors());
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({ limit: jsonBodyLimit }));
 
 app.use((req: Request, _res: Response, next: NextFunction) => {
   const startedAt = Date.now();

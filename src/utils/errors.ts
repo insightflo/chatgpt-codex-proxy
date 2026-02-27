@@ -47,10 +47,32 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  const proxyError =
-    err instanceof ProxyError
-      ? err
-      : new ProxyError("Internal Server Error", 500, "internal_server_error");
+  const isBodyTooLarge =
+    typeof err === "object" &&
+    err !== null &&
+    "type" in err &&
+    (err as { type?: string }).type === "entity.too.large";
+
+  const isBodySyntaxError =
+    err instanceof SyntaxError &&
+    typeof err === "object" &&
+    err !== null &&
+    "body" in err;
+
+  const proxyError = err instanceof ProxyError
+    ? err
+    : isBodyTooLarge
+      ? new ProxyError(
+          "Request body too large. Reduce image size or increase PROXY_JSON_LIMIT.",
+          413,
+          "request_too_large",
+        )
+      : isBodySyntaxError
+        ? new ProxyError("Invalid JSON body", 400, "invalid_request_error")
+        : new ProxyError("Internal Server Error", 500, "internal_server_error", {
+            name: err instanceof Error ? err.name : undefined,
+            message: err instanceof Error ? err.message : String(err),
+          });
 
   if (proxyError.statusCode >= 500) {
     // eslint-disable-next-line no-console

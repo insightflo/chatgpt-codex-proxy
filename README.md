@@ -182,6 +182,8 @@ ANTHROPIC_AUTH_TOKEN=... gpt
 | Max Tokens | ❌ | Codex 미지원 |
 
 참고: Tool Calling은 백엔드(Codex/모델)가 function_call/function_call_output을 지원해야 정상 동작합니다.
+참고: 이미지 입력은 Anthropic `image(base64)`를 Responses `input_image(data URL)`로 변환합니다.
+참고: 멀티턴 변환 시 `user.text -> input_text`, `assistant.text -> output_text`로 role-aware 매핑합니다.
 
 ### 호환성 체크리스트 (권장)
 
@@ -227,6 +229,7 @@ chatgpt-codex-proxy/
 | 변수 | 기본값 | 설명 |
 |:---|:---|:---|
 | `PORT` | `19080` | 서버 포트 |
+| `PROXY_JSON_LIMIT` | `20mb` | 이미지 포함 요청의 JSON 본문 제한 |
 | `CODEX_BASE_URL` | `https://chatgpt.com/backend-api` | Codex API URL |
 | `ANTHROPIC_DEFAULT_HAIKU_MODEL` | - | Haiku → Codex 모델 매핑 |
 | `ANTHROPIC_DEFAULT_SONNET_MODEL` | - | Sonnet → Codex 모델 매핑 |

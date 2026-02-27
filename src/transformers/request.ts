@@ -5,7 +5,6 @@ import type {
   AnthropicTool,
   AnthropicToolChoice,
   ContentBlock,
-  TextContentBlock,
 } from "../types/anthropic.js";
 
 export interface CodexTool {
@@ -20,8 +19,20 @@ export type CodexToolChoice = "auto" | "none" | "required" | { type: "function";
 export interface CodexInputMessage {
   type: "message";
   role: "user" | "assistant";
-  content: string;
+  content: string | CodexInputContentPart[];
 }
+
+export interface CodexInputTextPart {
+  type: "input_text" | "output_text";
+  text: string;
+}
+
+export interface CodexInputImagePart {
+  type: "input_image";
+  image_url: string;
+}
+
+export type CodexInputContentPart = CodexInputTextPart | CodexInputImagePart;
 
 export interface CodexFunctionCallOutput {
   type: "function_call_output";
@@ -119,21 +130,37 @@ function mapToolChoice(choice: AnthropicToolChoice | undefined): CodexToolChoice
 }
 
 function contentToInputItems(role: "user" | "assistant", content: string | ContentBlock[]): CodexInputItem[] {
+  const textPartType: CodexInputTextPart["type"] = role === "assistant" ? "output_text" : "input_text";
+
+  if (typeof content === "string") {
+    const text = content.trim();
+    return text.length > 0 ? [{ type: "message", role, content: [{ type: textPartType, text }] }] : [];
+  }
+
   const items: CodexInputItem[] = [];
-  const blocks: ContentBlock[] =
-    typeof content === "string"
-      ? ([{ type: "text", text: content }] as TextContentBlock[])
-      : content;
+  const blocks: ContentBlock[] = content;
+  const messageParts: CodexInputContentPart[] = [];
+
+  const flushMessageParts = () => {
+    if (messageParts.length === 0) return;
+    items.push({
+      type: "message",
+      role,
+      content: [...messageParts],
+    });
+    messageParts.length = 0;
+  };
 
   for (const block of blocks) {
     if (block.type === "text") {
       const text = block.text?.trim();
       if (!text) continue;
-      items.push({ type: "message", role, content: text });
+      messageParts.push({ type: textPartType, text });
       continue;
     }
 
     if (block.type === "tool_result") {
+      flushMessageParts();
       const output =
         typeof block.content === "undefined"
           ? block.is_error
@@ -151,6 +178,7 @@ function contentToInputItems(role: "user" | "assistant", content: string | Conte
     }
 
     if (block.type === "tool_use") {
+      flushMessageParts();
       items.push({
         type: "function_call",
         call_id: block.id,
@@ -161,13 +189,18 @@ function contentToInputItems(role: "user" | "assistant", content: string | Conte
     }
 
     if (block.type === "image") {
-      items.push({
-        type: "message",
-        role,
-        content: "[image omitted]",
-      });
+      const mediaType = block.source?.media_type?.trim();
+      const base64Data = block.source?.data?.trim();
+      if (mediaType && base64Data) {
+        messageParts.push({
+          type: "input_image",
+          image_url: `data:${mediaType};base64,${base64Data}`,
+        });
+      }
     }
   }
+
+  flushMessageParts();
 
   return items;
 }

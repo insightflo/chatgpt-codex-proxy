@@ -166,7 +166,22 @@ router.post(
         }
         return next(new ProxyError(error.message, 502, "api_error"));
       }
-      next(error);
+
+      if (error instanceof Error) {
+        return next(
+          new ProxyError(
+            `Unhandled proxy error: ${error.message}`,
+            500,
+            "internal_server_error",
+            {
+              name: error.name,
+              stack: error.stack,
+            },
+          ),
+        );
+      }
+
+      next(new ProxyError("Unhandled proxy error", 500, "internal_server_error", { error }));
     }
   }
 );
