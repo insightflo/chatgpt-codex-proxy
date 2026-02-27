@@ -162,6 +162,9 @@ ANTHROPIC_AUTH_TOKEN=... gpt
 - 매핑 모드로 테스트: `PASSTHROUGH_MODE=false gpt --model gpt-5.2`
 - 최근 로그: `tail -n 120 /tmp/chatgpt-codex-proxy.log`
 
+툴 라운드트립 스모크 테스트:
+- `python3 scripts/tool_calling_smoke.py --base-url http://127.0.0.1:19080 --model gpt-5.2`
+
 
 ## API 호환성
 
@@ -179,6 +182,14 @@ ANTHROPIC_AUTH_TOKEN=... gpt
 | Max Tokens | ❌ | Codex 미지원 |
 
 참고: Tool Calling은 백엔드(Codex/모델)가 function_call/function_call_output을 지원해야 정상 동작합니다.
+
+### 호환성 체크리스트 (권장)
+
+- Messages + 멀티턴: 기본 질의 2턴 이상이 유지되는지 확인
+- Streaming: `stream=true`에서 `message_start` -> `content_block_*` -> `message_stop` 순서 확인
+- Tool Calling Roundtrip: `tools/tool_choice` -> `tool_use` -> `tool_result` 흐름 확인
+- Tool Schema Safety: object schema에 `properties` 누락 시 프록시에서 자동 정규화되는지 확인
+- Passthrough/Mapping 모드: `PASSTHROUGH_MODE=true/false` 각각에서 모델 라우팅 기대값 확인
 
 ### 엔드포인트
 
