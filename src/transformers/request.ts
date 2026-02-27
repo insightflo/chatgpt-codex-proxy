@@ -62,6 +62,35 @@ export interface CodexRequest {
   parallel_tool_calls?: boolean;
 }
 
+const MUTATING_TOOL_NAME_PATTERNS = [
+  /(^|[_-])edit($|[_-])/i,
+  /(^|[_-])update($|[_-])/i,
+  /(^|[_-])write($|[_-])/i,
+  /(^|[_-])replace($|[_-])/i,
+  /(^|[_-])delete($|[_-])/i,
+  /(^|[_-])create($|[_-])/i,
+  /(^|[_-])insert($|[_-])/i,
+  /(^|[_-])move($|[_-])/i,
+  /(^|[_-])rename($|[_-])/i,
+];
+
+function isMutatingToolName(name: string): boolean {
+  return MUTATING_TOOL_NAME_PATTERNS.some((pattern) => pattern.test(name));
+}
+
+function shouldDisableParallelToolCalls(anthropic: AnthropicRequest): boolean {
+  if (!anthropic.parallel_tool_calls) return false;
+
+  const mutatingTools = (anthropic.tools ?? []).filter((tool) => isMutatingToolName(tool.name));
+  if (mutatingTools.length > 0) return true;
+
+  if (anthropic.tool_choice?.type === "tool") {
+    return isMutatingToolName(anthropic.tool_choice.name);
+  }
+
+  return false;
+}
+
 function flattenContent(content: string | ContentBlock[] | undefined): string {
   if (!content) return "";
 
@@ -232,6 +261,9 @@ export function transformAnthropicToCodex(anthropic: AnthropicRequest): CodexReq
   const tools = anthropic.tools?.map(mapAnthropicToolToCodexTool);
   const toolChoice = mapToolChoice(anthropic.tool_choice);
 
+  const disableParallelToolCalls = shouldDisableParallelToolCalls(anthropic);
+  const parallelToolCalls = disableParallelToolCalls ? undefined : anthropic.parallel_tool_calls;
+
   return {
     model: codexModel,
     instructions: systemInstruction,
@@ -242,6 +274,6 @@ export function transformAnthropicToCodex(anthropic: AnthropicRequest): CodexReq
     text: { verbosity: "medium" },
     tools: tools && tools.length > 0 ? tools : undefined,
     tool_choice: toolChoice,
-    parallel_tool_calls: anthropic.parallel_tool_calls,
+    parallel_tool_calls: parallelToolCalls,
   };
 }
