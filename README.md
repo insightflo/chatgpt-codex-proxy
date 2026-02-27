@@ -174,9 +174,11 @@ ANTHROPIC_AUTH_TOKEN=... gpt
 | 멀티턴 대화 | ✅ | |
 | 시스템 프롬프트 | ✅ | `instructions`로 매핑 |
 | 이미지 입력 | ⚠️ | 제한적 |
-| Tool Calling | ❌ | 향후 지원 예정 |
+| Tool Calling | ✅ | Anthropic tools/tool_choice/tool_result 브리징 지원 |
 | Temperature | ❌ | Codex 미지원 |
 | Max Tokens | ❌ | Codex 미지원 |
+
+참고: Tool Calling은 백엔드(Codex/모델)가 function_call/function_call_output을 지원해야 정상 동작합니다.
 
 ### 엔드포인트
 

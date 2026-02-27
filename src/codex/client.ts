@@ -15,6 +15,10 @@ export interface CodexUsage {
 export interface CodexOutputContent {
   type: string;
   text?: string;
+  id?: string;
+  name?: string;
+  call_id?: string;
+  arguments?: string;
   [key: string]: unknown;
 }
 
@@ -22,6 +26,9 @@ export interface CodexOutputItem {
   id?: string;
   type?: string;
   role?: string;
+  call_id?: string;
+  name?: string;
+  arguments?: string;
   content?: CodexOutputContent[];
   [key: string]: unknown;
 }

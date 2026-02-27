@@ -56,8 +56,6 @@ router.post(
         res.setHeader("Cache-Control", "no-cache");
         res.setHeader("Connection", "keep-alive");
 
-        const text = (anthropicResponse.content?.[0]?.type === "text" ? anthropicResponse.content[0].text : "") ?? "";
-
         // message_start
         res.write(
           `event: message_start\ndata: ${JSON.stringify({
@@ -74,37 +72,75 @@ router.post(
           })}\n\n`
         );
 
-        // content_block_start
-        res.write(
-          `event: content_block_start\ndata: ${JSON.stringify({
-            type: "content_block_start",
-            index: 0,
-            content_block: { type: "text", text: "" },
-          })}\n\n`
-        );
+        let blockIndex = 0;
+        for (const block of anthropicResponse.content ?? []) {
+          if (block.type === "text") {
+            res.write(
+              `event: content_block_start\ndata: ${JSON.stringify({
+                type: "content_block_start",
+                index: blockIndex,
+                content_block: { type: "text", text: "" },
+              })}\n\n`
+            );
 
-        // content_block_delta
-        res.write(
-          `event: content_block_delta\ndata: ${JSON.stringify({
-            type: "content_block_delta",
-            index: 0,
-            delta: { type: "text_delta", text },
-          })}\n\n`
-        );
+            res.write(
+              `event: content_block_delta\ndata: ${JSON.stringify({
+                type: "content_block_delta",
+                index: blockIndex,
+                delta: { type: "text_delta", text: block.text ?? "" },
+              })}\n\n`
+            );
 
-        // content_block_stop
-        res.write(
-          `event: content_block_stop\ndata: ${JSON.stringify({
-            type: "content_block_stop",
-            index: 0,
-          })}\n\n`
-        );
+            res.write(
+              `event: content_block_stop\ndata: ${JSON.stringify({
+                type: "content_block_stop",
+                index: blockIndex,
+              })}\n\n`
+            );
+            blockIndex += 1;
+            continue;
+          }
+
+          if (block.type === "tool_use") {
+            res.write(
+              `event: content_block_start\ndata: ${JSON.stringify({
+                type: "content_block_start",
+                index: blockIndex,
+                content_block: {
+                  type: "tool_use",
+                  id: block.id,
+                  name: block.name,
+                  input: {},
+                },
+              })}\n\n`
+            );
+
+            res.write(
+              `event: content_block_delta\ndata: ${JSON.stringify({
+                type: "content_block_delta",
+                index: blockIndex,
+                delta: {
+                  type: "input_json_delta",
+                  partial_json: JSON.stringify(block.input ?? {}),
+                },
+              })}\n\n`
+            );
+
+            res.write(
+              `event: content_block_stop\ndata: ${JSON.stringify({
+                type: "content_block_stop",
+                index: blockIndex,
+              })}\n\n`
+            );
+            blockIndex += 1;
+          }
+        }
 
         // message_delta
         res.write(
           `event: message_delta\ndata: ${JSON.stringify({
             type: "message_delta",
-            delta: { stop_reason: "end_turn", stop_sequence: null },
+            delta: { stop_reason: anthropicResponse.stop_reason, stop_sequence: anthropicResponse.stop_sequence ?? null },
             usage: anthropicResponse.usage,
           })}\n\n`
         );

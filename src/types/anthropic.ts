@@ -16,7 +16,25 @@ export interface ImageContentBlock {
   source: ImageSource;
 }
 
-export type ContentBlock = TextContentBlock | ImageContentBlock;
+export interface ToolUseContentBlock {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+export interface ToolResultContentBlock {
+  type: "tool_result";
+  tool_use_id: string;
+  content?: string | ContentBlock[];
+  is_error?: boolean;
+}
+
+export type ContentBlock =
+  | TextContentBlock
+  | ImageContentBlock
+  | ToolUseContentBlock
+  | ToolResultContentBlock;
 
 export interface AnthropicMessage {
   role: Exclude<MessageRole, "system">;
@@ -34,7 +52,20 @@ export interface AnthropicRequest {
   stream?: boolean;
   stop_sequences?: string[];
   metadata?: Record<string, unknown>;
+  tools?: AnthropicTool[];
+  tool_choice?: AnthropicToolChoice;
+  parallel_tool_calls?: boolean;
 }
+
+export interface AnthropicTool {
+  name: string;
+  description?: string;
+  input_schema: Record<string, unknown>;
+}
+
+export type AnthropicToolChoice =
+  | { type: "auto" | "any" | "none" }
+  | { type: "tool"; name: string };
 
 export interface Usage {
   input_tokens: number;
@@ -47,7 +78,7 @@ export interface AnthropicResponse {
   role: "assistant";
   content: ContentBlock[];
   model: string;
-  stop_reason: "end_turn" | "max_tokens" | "stop_sequence" | null;
+  stop_reason: "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" | null;
   stop_sequence?: string | null;
   usage: Usage;
 }
