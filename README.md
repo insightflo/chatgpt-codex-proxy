@@ -82,6 +82,8 @@ claude
 
 ## 모델 매핑
 
+### 기본 매핑
+
 | Claude 모델 | Codex 모델 |
 |:---|:---|
 | `claude-sonnet-4-20250514` | `gpt-5.2-codex` |
@@ -89,6 +91,53 @@ claude
 | `claude-3-haiku-20240307` | `gpt-5.3-codex-spark` |
 | `claude-3-opus-20240229` | `gpt-5.3-codex-xhigh` |
 | 기본값 | `gpt-5.2-codex` |
+
+### 커스텀 모델 매핑
+
+환경변수로 Codex 모델을 직접 지정할 수 있습니다:
+
+| 환경변수 | 설명 |
+|:---|:---|
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | Haiku 계열 모델이 요청될 때 사용할 Codex 모델 |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | Sonnet 계열 모델이 요청될 때 사용할 Codex 모델 |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL` | Opus 계열 모델이 요청될 때 사용할 Codex 모델 |
+
+**우선순위**: 환경변수 > 기본 매핑
+
+예시:
+```bash
+# Haiku 요청에 gpt-5.3-codex-spark 사용
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="gpt-5.3-codex-spark"
+
+# Sonnet 요청에 gpt-5.2-codex 사용
+export ANTHROPIC_DEFAULT_SONNET_MODEL="gpt-5.2-codex"
+```
+
+### 쉘 함수로 쉽게 설정하기
+
+`.zshrc` 또는 `.bashrc`에 함수를 등록하면 편리합니다:
+
+```bash
+# Claude Code with ChatGPT Codex
+claude-codex() {
+  export ANTHROPIC_BASE_URL="http://localhost:8080"
+  export ANTHROPIC_API_KEY="dummy"
+  export ANTHROPIC_DEFAULT_HAIKU_MODEL="gpt-5.3-codex-spark"
+  export ANTHROPIC_DEFAULT_SONNET_MODEL="gpt-5.2-codex"
+  export ANTHROPIC_DEFAULT_OPUS_MODEL="gpt-5.2-codex"
+  claude "$@"
+}
+```
+
+사용법:
+```bash
+# 서버 실행 (별도 터미널)
+npm run dev
+
+# Claude Code 실행
+claude-codex
+```
+
 
 ## API 호환성
 
@@ -142,6 +191,9 @@ chatgpt-codex-proxy/
 |:---|:---|:---|
 | `PORT` | `8080` | 서버 포트 |
 | `CODEX_BASE_URL` | `https://chatgpt.com/backend-api` | Codex API URL |
+| `ANTHROPIC_DEFAULT_HAIKU_MODEL` | - | Haiku → Codex 모델 매핑 |
+| `ANTHROPIC_DEFAULT_SONNET_MODEL` | - | Sonnet → Codex 모델 매핑 |
+| `ANTHROPIC_DEFAULT_OPUS_MODEL` | - | Opus → Codex 모델 매핑 |
 
 ## 보안
 
