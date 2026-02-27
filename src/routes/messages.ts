@@ -12,7 +12,13 @@ router.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({
     status: "ok",
     service: "chatgpt-codex-proxy",
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    proxy_signature: process.env.CHATGPT_CODEX_PROXY_SIGNATURE ?? null,
+    model_overrides: {
+      haiku: process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL ?? null,
+      sonnet: process.env.ANTHROPIC_DEFAULT_SONNET_MODEL ?? null,
+      opus: process.env.ANTHROPIC_DEFAULT_OPUS_MODEL ?? null,
+    },
   });
 });
 
@@ -34,6 +40,10 @@ router.post(
           "invalid_request_error"
         );
       }
+
+      console.log(
+        `[chatgpt-codex-proxy] inbound messages model=${body.model} stream=${Boolean(body.stream)} messages=${body.messages.length}`,
+      );
 
       // Transform and call Codex
       const codexRequest = transformAnthropicToCodex(body);

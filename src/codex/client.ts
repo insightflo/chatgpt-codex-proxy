@@ -131,6 +131,11 @@ export class CodexClient {
 
     console.log(`[chatgpt-codex-proxy] Calling ${request.model} with effort=${request.reasoning.effort}`);
 
+    const codexRequest: CodexRequest = {
+      ...request,
+      stream: true,
+    };
+
     const response = await fetch(`${CODEX_BASE_URL}${CODEX_RESPONSES_PATH}`, {
       method: "POST",
       headers: {
@@ -140,7 +145,7 @@ export class CodexClient {
         "OpenAI-Beta": "responses=experimental",
         "originator": "codex_cli_rs",
       },
-      body: JSON.stringify(request),
+      body: JSON.stringify(codexRequest),
     });
 
     if (!response.ok) {
