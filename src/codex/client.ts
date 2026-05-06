@@ -237,6 +237,27 @@ export class CodexClient {
     }
 
     if (finalResponse) {
+      // gpt-5.5 fix: response.completed sometimes has empty output[] even though
+      // text was streamed via output_text.delta events. Inject the accumulated
+      // text so downstream sees it. Older models (5.4, 5.3-codex) populate output[]
+      // in response.completed, so this only triggers when truly missing.
+      const hasOutputText = (finalResponse.output ?? []).some(
+        (item: any) =>
+          item?.type === "message" &&
+          (item?.content ?? []).some(
+            (c: any) => c?.type === "output_text" && typeof c?.text === "string" && c.text.length > 0
+          )
+      );
+      if (!hasOutputText && outputTextParts.length > 0) {
+        finalResponse.output = [
+          ...(finalResponse.output ?? []),
+          {
+            role: "assistant",
+            type: "message",
+            content: [{ type: "output_text", text: outputTextParts.join("") }],
+          },
+        ];
+      }
       return finalResponse;
     }
 
@@ -257,22 +278,46 @@ export class CodexClient {
 
   private parseFinalResponse(sseText: string): CodexResponse {
     const lines = sseText.split("\n");
+    const outputTextParts: string[] = [];
+    let finalResponse: CodexResponse | null = null;
 
     for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        try {
-          const data = JSON.parse(line.slice(6));
-
-          // Look for response.done event
-          if (data.type === "response.done" || data.type === "response.completed") {
-            return data.response as CodexResponse;
-          }
-        } catch {
-          // Skip malformed JSON
+      if (!line.startsWith("data: ")) continue;
+      try {
+        const data = JSON.parse(line.slice(6));
+        if (data.type === "response.output_text.delta" && typeof data.delta === "string") {
+          outputTextParts.push(data.delta);
         }
+        if ((data.type === "response.done" || data.type === "response.completed") && data.response) {
+          finalResponse = data.response as CodexResponse;
+        }
+      } catch {
+        // Skip malformed JSON
       }
     }
 
-    throw new CodexApiError("Failed to parse Codex SSE response", 502);
+    if (!finalResponse) {
+      throw new CodexApiError("Failed to parse Codex SSE response", 502);
+    }
+
+    // gpt-5.5 fix: response.completed sometimes ships output:[] but text was streamed via deltas.
+    const hasOutputText = (finalResponse.output ?? []).some(
+      (item: any) =>
+        item?.type === "message" &&
+        (item?.content ?? []).some(
+          (c: any) => c?.type === "output_text" && typeof c?.text === "string" && c.text.length > 0
+        )
+    );
+    if (!hasOutputText && outputTextParts.length > 0) {
+      finalResponse.output = [
+        ...(finalResponse.output ?? []),
+        {
+          role: "assistant",
+          type: "message",
+          content: [{ type: "output_text", text: outputTextParts.join("") }],
+        },
+      ];
+    }
+    return finalResponse;
   }
 }
