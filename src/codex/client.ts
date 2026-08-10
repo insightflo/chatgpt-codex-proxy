@@ -213,66 +213,97 @@ export class CodexClient {
     }
 
     const outputTextParts: string[] = [];
+    const collectedItems: any[] = [];
     let finalResponse: CodexResponse | null = null;
 
     for await (const event of parseSseStream(response.body)) {
       if (event.data === "[DONE]") break;
 
-      let parsed: { type?: string; delta?: string; response?: CodexResponse };
+      let parsed: { type?: string; delta?: string; response?: CodexResponse; item?: any };
       try {
         parsed = JSON.parse(event.data);
       } catch {
         continue;
       }
 
-      // Accumulate text deltas
       if (parsed.type === "response.output_text.delta" && typeof parsed.delta === "string") {
         outputTextParts.push(parsed.delta);
       }
-
-      // Capture final response
+      if (parsed.type === "response.output_item.done" && parsed.item) {
+        collectedItems.push(parsed.item);
+      }
       if ((parsed.type === "response.done" || parsed.type === "response.completed") && parsed.response) {
         finalResponse = parsed.response;
       }
     }
 
+    return this.mergeStreamedItems(finalResponse, collectedItems, outputTextParts);
+  }
+
+  // gpt-5.5 fix: response.completed sometimes ships output:[] while items
+  // (text, function_calls, reasoning) were streamed via output_item.done /
+  // output_text.delta events. Older models (5.4, 5.3-codex) populate output[]
+  // in the completion event so this only takes effect when truly missing.
+  private mergeStreamedItems(
+    finalResponse: CodexResponse | null,
+    collectedItems: any[],
+    outputTextParts: string[]
+  ): CodexResponse {
+    const synthesizedFromItems = collectedItems.length > 0 ? collectedItems : null;
+    const synthesizedFromText =
+      outputTextParts.length > 0
+        ? [
+            {
+              role: "assistant",
+              type: "message",
+              content: [{ type: "output_text", text: outputTextParts.join("") }],
+            },
+          ]
+        : null;
+
     if (finalResponse) {
+      const finalHasContent = (finalResponse.output ?? []).length > 0;
+      if (!finalHasContent) {
+        finalResponse.output = synthesizedFromItems ?? synthesizedFromText ?? [];
+      }
       return finalResponse;
     }
 
-    // Fallback: construct response from accumulated text
     return {
       id: randomUUID(),
       model: "codex",
-      output: [
-        {
-          role: "assistant",
-          type: "message",
-          content: [{ type: "output_text", text: outputTextParts.join("") }],
-        },
-      ],
+      output: synthesizedFromItems ?? synthesizedFromText ?? [],
       stop_reason: "end_turn",
-    };
+    } as CodexResponse;
   }
 
   private parseFinalResponse(sseText: string): CodexResponse {
     const lines = sseText.split("\n");
+    const outputTextParts: string[] = [];
+    const collectedItems: any[] = [];
+    let finalResponse: CodexResponse | null = null;
 
     for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        try {
-          const data = JSON.parse(line.slice(6));
-
-          // Look for response.done event
-          if (data.type === "response.done" || data.type === "response.completed") {
-            return data.response as CodexResponse;
-          }
-        } catch {
-          // Skip malformed JSON
+      if (!line.startsWith("data: ")) continue;
+      try {
+        const data = JSON.parse(line.slice(6));
+        if (data.type === "response.output_text.delta" && typeof data.delta === "string") {
+          outputTextParts.push(data.delta);
         }
+        if (data.type === "response.output_item.done" && data.item) {
+          collectedItems.push(data.item);
+        }
+        if ((data.type === "response.done" || data.type === "response.completed") && data.response) {
+          finalResponse = data.response as CodexResponse;
+        }
+      } catch {
+        // Skip malformed JSON
       }
     }
 
-    throw new CodexApiError("Failed to parse Codex SSE response", 502);
+    if (!finalResponse) {
+      throw new CodexApiError("Failed to parse Codex SSE response", 502);
+    }
+    return this.mergeStreamedItems(finalResponse, collectedItems, outputTextParts);
   }
 }
