@@ -22,6 +22,8 @@ import { mcpToolRegistry } from "./mcp/registry.js";
 dotenv.config();
 
 const PORT = Number(process.env.PORT ?? 19080);
+// Bind loopback only by default; this proxy is meant to be local-only.
+const HOST = process.env.HOST ?? "127.0.0.1";
 
 /*
 MCP 레지스트리를 먼저 초기화한 뒤 HTTP 서버를 시작한다.
@@ -30,7 +32,7 @@ PROXY_MCP_SERVERS 미설정 시 즉시 완료(논블로킹).
 */
 await mcpToolRegistry.initialize();
 
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   // eslint-disable-next-line no-console
-  console.log(`chatgpt-codex-proxy listening on port ${PORT}`);
+  console.log(`chatgpt-codex-proxy listening on ${HOST}:${PORT}`);
 });
