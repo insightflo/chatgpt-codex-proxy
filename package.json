@@ -10,6 +10,7 @@
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "login": "tsx src/cli.ts login",
+    "import-tokens": "tsx src/cli.ts import",
     "logout": "tsx src/cli.ts logout",
     "status": "tsx src/cli.ts status"
   },

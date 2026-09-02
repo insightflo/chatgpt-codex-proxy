@@ -197,14 +197,11 @@ export class CodexClient {
       throw new CodexApiError(parseErrorMessage(response.status, parsedBody), response.status, parsedBody);
     }
 
-    // Handle SSE stream
-    if (request.stream) {
-      return await this.parseSseResponse(response);
-    }
-
-    // Non-streaming: parse final response
-    const sseText = await response.text();
-    return this.parseFinalResponse(sseText);
+    // The backend always returns an SSE stream (we force stream:true above),
+    // so always parse as SSE. The final `response.completed` event carries an
+    // empty `output` when store:false, so text/tool-call content must be
+    // reconstructed from the streamed output_item.done events.
+    return await this.parseSseResponse(response);
   }
 
   private async parseSseResponse(response: Response): Promise<CodexResponse> {
@@ -213,12 +210,18 @@ export class CodexClient {
     }
 
     const outputTextParts: string[] = [];
+    const items: CodexOutputItem[] = [];
     let finalResponse: CodexResponse | null = null;
 
     for await (const event of parseSseStream(response.body)) {
       if (event.data === "[DONE]") break;
 
-      let parsed: { type?: string; delta?: string; response?: CodexResponse };
+      let parsed: {
+        type?: string;
+        delta?: string;
+        response?: CodexResponse;
+        item?: CodexOutputItem;
+      };
       try {
         parsed = JSON.parse(event.data);
       } catch {
@@ -230,10 +233,28 @@ export class CodexClient {
         outputTextParts.push(parsed.delta);
       }
 
+      // Capture completed output items (carry full text / tool call payloads)
+      if (parsed.type === "response.output_item.done" && parsed.item) {
+        items.push(parsed.item);
+      }
+
       // Capture final response
       if ((parsed.type === "response.done" || parsed.type === "response.completed") && parsed.response) {
         finalResponse = parsed.response;
       }
+    }
+
+    // With store:false the final response's output is empty; reconstruct from
+    // the accumulated streamed items so text and tool calls come through.
+    const hasOutput = (finalResponse?.output?.length ?? 0) > 0;
+    if (!hasOutput && items.length > 0) {
+      return {
+        ...(finalResponse ?? {}),
+        id: finalResponse?.id ?? randomUUID(),
+        model: finalResponse?.model ?? "codex",
+        output: items,
+        stop_reason: finalResponse?.stop_reason ?? "end_turn",
+      } as CodexResponse;
     }
 
     if (finalResponse) {
@@ -256,16 +277,20 @@ export class CodexClient {
   }
 
   private parseFinalResponse(sseText: string): CodexResponse {
-    const lines = sseText.split("\n");
+    const items: CodexOutputItem[] = [];
+    let finalResponse: CodexResponse | null = null;
 
+    const lines = sseText.split("\n");
     for (const line of lines) {
       if (line.startsWith("data: ")) {
         try {
           const data = JSON.parse(line.slice(6));
 
-          // Look for response.done event
+          if (data.type === "response.output_item.done" && data.item) {
+            items.push(data.item);
+          }
           if (data.type === "response.done" || data.type === "response.completed") {
-            return data.response as CodexResponse;
+            finalResponse = data.response as CodexResponse;
           }
         } catch {
           // Skip malformed JSON
@@ -273,6 +298,15 @@ export class CodexClient {
       }
     }
 
+    if (finalResponse && (finalResponse.output?.length ?? 0) === 0 && items.length > 0) {
+      return { ...finalResponse, output: items };
+    }
+    if (finalResponse) {
+      return finalResponse;
+    }
+    if (items.length > 0) {
+      return { id: randomUUID(), model: "codex", output: items, stop_reason: "end_turn" };
+    }
     throw new CodexApiError("Failed to parse Codex SSE response", 502);
   }
 }

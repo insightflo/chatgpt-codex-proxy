@@ -15,7 +15,7 @@
  * [수정시 주의]
  * - 명령 이름을 바꾸면 package.json 스크립트나 사용자 사용법도 함께 수정해야 한다.
  */
-import { login, logout, getAuthStatus } from "./auth.js";
+import { login, logout, getAuthStatus, importTokensFromCodexCli } from "./auth.js";
 
 async function main(): Promise<void> {
   const command = process.argv[2];
@@ -57,13 +57,27 @@ async function main(): Promise<void> {
       return;
     }
 
+    case "import": {
+      console.log("Importing tokens from Codex CLI (~/.codex/auth.json)...");
+      const tokens = await importTokensFromCodexCli();
+      if (tokens) {
+        console.log("\n✅ Tokens imported and saved!");
+        console.log(`Expires: ${new Date(tokens.expires_at).toLocaleString()}`);
+      } else {
+        console.log("\n❌ Import failed");
+        process.exit(1);
+      }
+      return;
+    }
+
     default: {
       console.log("ChatGPT Codex Proxy CLI");
       console.log("");
       console.log("Usage:");
-      console.log("  npm run login   - Start OAuth login flow");
-      console.log("  npm run logout  - Delete stored tokens");
-      console.log("  npm run status  - Check authentication status");
+      console.log("  npm run login         - Start OAuth login flow");
+      console.log("  npm run import-tokens - Import tokens from Codex CLI (~/.codex/auth.json)");
+      console.log("  npm run logout        - Delete stored tokens");
+      console.log("  npm run status        - Check authentication status");
     }
   }
 }
