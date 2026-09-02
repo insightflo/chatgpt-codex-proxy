@@ -387,3 +387,68 @@ export async function getAuthStatus(): Promise<{
     expiresAt: tokens.expires_at,
   };
 }
+
+/**
+ * Import tokens from an existing Codex CLI ChatGPT login (~/.codex/auth.json).
+ * Useful as a fallback when the browser OAuth flow is unavailable (headless,
+ * firewalled, or the localhost callback port is already in use).
+ * Refreshes the token first so the stored tokens are fresh.
+ */
+export async function importTokensFromCodexCli(): Promise<TokenData | null> {
+  const authFile = join(homedir(), ".codex", "auth.json");
+  if (!existsSync(authFile)) {
+    console.error("[chatgpt-codex-proxy] ~/.codex/auth.json not found. Log into the Codex CLI first.");
+    return null;
+  }
+
+  let auth: { tokens?: { refresh_token?: string; account_id?: string } };
+  try {
+    auth = JSON.parse(readFileSync(authFile, "utf-8"));
+  } catch {
+    console.error("[chatgpt-codex-proxy] Failed to parse ~/.codex/auth.json");
+    return null;
+  }
+
+  const refreshToken = auth?.tokens?.refresh_token;
+  const accountId = auth?.tokens?.account_id;
+  if (!refreshToken) {
+    console.error("[chatgpt-codex-proxy] No refresh_token in ~/.codex/auth.json");
+    return null;
+  }
+
+  const res = await fetch(TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: CLIENT_ID,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    console.error("[chatgpt-codex-proxy] Token refresh failed:", res.status, text);
+    return null;
+  }
+
+  const json = (await res.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+  };
+
+  if (!json?.access_token || !json?.refresh_token || !json?.expires_in) {
+    console.error("[chatgpt-codex-proxy] Token response missing fields");
+    return null;
+  }
+
+  const tokens: TokenData = {
+    access_token: json.access_token,
+    refresh_token: json.refresh_token,
+    expires_at: Date.now() + json.expires_in * 1000,
+    chatgpt_account_id: accountId ?? undefined,
+  };
+  saveTokens(tokens);
+  return tokens;
+}
